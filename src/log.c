@@ -2,11 +2,11 @@
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/file.h> // NOUVEAU : pour les verrous
 
 static FILE *log_file = NULL;
 
 void log_init(const char *filename) {
-    // "a" = append : plusieurs processus peuvent écrire sans s'écraser
     log_file = fopen(filename, "a");
     if (!log_file) {
         perror("Erreur ouverture fichier log");
@@ -17,6 +17,10 @@ void log_init(const char *filename) {
 void log_message(int process_id, const char *action, const char *details) {
     if (!log_file) return;
 
+    // On demande un accès exclusif au fichier pour écrire la ligne
+    int fd = fileno(log_file);
+    flock(fd, LOCK_EX); // Bloque les autres processus pendant l'écriture
+
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
 
@@ -26,11 +30,13 @@ void log_message(int process_id, const char *action, const char *details) {
     char time_buf[32];
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &tm_info);
 
-    // Écriture atomique (une seule ligne = un seul appel fprintf)
     fprintf(log_file, "[%s.%03ld] [PID:%d] [%s] %s\n",
             time_buf, ts.tv_nsec / 1000000,
             process_id, action, details);
     fflush(log_file);
+
+    // On libère le verrou une fois la ligne écrite
+    flock(fd, LOCK_UN); 
 }
 
 void log_close(void) {
