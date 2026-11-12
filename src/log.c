@@ -1,12 +1,34 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "log.h"
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sys/file.h> // NOUVEAU : pour les verrous
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
 
 static FILE *log_file = NULL;
 
 void log_init(const char *filename) {
+    char log_path[512];
+    char *slash;
+
+    if (filename == NULL) {
+        return;
+    }
+
+    snprintf(log_path, sizeof(log_path), "%s", filename);
+    slash = strrchr(log_path, '/');
+    if (slash != NULL) {
+        *slash = '\0';
+        if (mkdir(log_path, 0777) != 0 && errno != EEXIST) {
+            perror("Erreur creation repertoire log");
+            exit(EXIT_FAILURE);
+        }
+    }
+
     log_file = fopen(filename, "a");
     if (!log_file) {
         perror("Erreur ouverture fichier log");
@@ -15,11 +37,12 @@ void log_init(const char *filename) {
 }
 
 void log_message(int process_id, const char *action, const char *details) {
-    if (!log_file) return;
+    if (!log_file) {
+        return;
+    }
 
-    // On demande un accès exclusif au fichier pour écrire la ligne
     int fd = fileno(log_file);
-    flock(fd, LOCK_EX); // Bloque les autres processus pendant l'écriture
+    flock(fd, LOCK_EX);
 
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -35,8 +58,7 @@ void log_message(int process_id, const char *action, const char *details) {
             process_id, action, details);
     fflush(log_file);
 
-    // On libère le verrou une fois la ligne écrite
-    flock(fd, LOCK_UN); 
+    flock(fd, LOCK_UN);
 }
 
 void log_close(void) {

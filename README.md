@@ -1,66 +1,118 @@
-# 📅 Ordre Chronologique - Système de Vote Byzantin (C/Linux)
+# Simulation du problème des généraux byzantins (C/Linux)
 
-## 📦 Semaine 1 : Fondations et Environnement (Jours 1 à 7)
-**Objectif :** Avoir Linux, écrire du C, et faire communiquer 2 programmes.
+Projet pédagogique qui simule l'algorithme oral OM(m) de Lamport, Shostak et Pease avec des processus Linux et des sockets TCP locales.
 
-### 1. Jour 1-2 : Setup Projet et Outils
-- [x] Installer WSL2 (Ubuntu) sur Windows ou utiliser une VM Linux. -> *(Les deux)* ✅
-- [x] Installer VS Code avec l'extension C/C++. -> *(Les deux)* ✅
-- [x] Installer GCC, Make et GDB (`sudo apt install build-essential gdb`). -> *(Les deux)* ✅
-- [x] Créer le dépôt Git (GitHub ou GitLab) et inviter le binôme. -> *(Les deux)* ✅
-- [x] Créer la structure de dossiers : `/src`, `/logs`, `/scripts`, et un Makefile de base. -> *(DEV A)* ✅
+## Prérequis et compilation
 
-### 2. Jour 3-4 : Première Communication (Sockets)
-- [x] Écrire un programme `test_socket.c` : un serveur qui écoute sur 127.0.0.1 (port 8080). -> *(DEV A)* ✅ *(Renommé `server.c` dans le dépôt)*
-- [x] Écrire un programme `test_client.c` : un client qui se connecte au serveur et envoie "Bonjour". -> *(DEV B)* ✅
-- [x] Tester la communication entre les deux. -> *(A et B ensemble)* ✅
+- Linux ou WSL2 avec une distribution Linux
+- GCC et GNU Make
+- Python 3, le module Python `graphviz` et le programme Graphviz pour produire le schéma
 
-### 3. Jour 5-7 : Lancement Multi-Processus (`fork`)
-- [x] Transformer le code pour qu'un programme principal lance **n** processus enfants avec `fork()`. -> *(DEV A)* ✅
-- [x] Faire en sorte que chaque processus ait un identifiant (ID 1, 2, 3, 4...) et connaisse son rôle (Commandant ou Lieutenant). -> *(DEV A)* ✅
-- [x] Mettre en place un système de log simple (fichier texte) pour tracer qui parle à qui. -> *(DEV B)* ✅ *(Implémenté dans `src/log.c` et `src/log.h` avec verrouillage `flock`)*
+Depuis la racine du dépôt :
 
----
+```sh
+make
+```
 
-## ⚔️ Semaine 2 : L'Algorithme (Tour 1 et Tour 2) (Jours 8 à 14)
-**Objectif :** Coder la logique de discussion et le mensonge.
+Cette commande crée `logs/` et compile `main`, `server` et `test_client`. Les deux derniers sont des exercices client/serveur indépendants de la simulation.
 
-### 4. Jour 8-10 : Tour 1 (Le Commandant parle)
-- [x] Coder la fonction d'envoi de message du Commandant vers tous les Lieutenants. -> *(DEV A)* ✅ *(Dans `src/main.c`)*
-- [x] Coder la fonction de réception côté Lieutenant (stockage du message dans un tableau `recu[expediteur]`). -> *(DEV B)* ✅ *(Dans `agir_en_lieutenant` de `src/main.c`)*
-- [x] Ajouter le mode Traître : si l'ID est traître, le Commandant envoie une valeur aléatoire ou inversée. -> *(DEV A)* ✅
+```sh
+make clean
+```
 
-### 5. Jour 11-14 : Tour 2 (Les Lieutenants se parlent) et VOTE
-- [x] Coder la retransmission : chaque Lieutenant envoie à tous les autres ce qu'il a reçu au Tour 1. -> *(DEV A)* ✅
-- [x] Coder la matrice de réception : chaque Lieutenant stocke ce que les autres lui ont dit au Tour 2. -> *(DEV B)* ✅
-- [x] Coder la fonction Vote : analyser la matrice et décider "Attaque" (1) ou "Retraite" (0) par majorité. -> *(DEV A)* ✅ *(Fonction `voter()` dans `src/main.c`)*
-- [x] **Test critique :** Lancer avec 1 Commandant loyal, 3 Lieutenants loyaux. Vérifier que tout le monde vote pareil. -> *(A et B ensemble)* ✅
+Supprime les exécutables et les fichiers générés dans `logs/`, y compris les journaux archivés.
 
----
+## Lancer une configuration
 
-## 🧪 Semaine 3 : Validation et Cas Complexes (Jours 15 à 21)
-**Objectif :** Prouver que l'algorithme marche et échoue aux bons endroits.
+```sh
+./main <n> <m> [liste_ids_traitres]
+```
 
-### 6. Jour 15-17 : Test n=4, m=1 (La borne est respectée)
-- [x] Créer un script shell (`scripts/run_test.sh`) qui lance 4 processus (1 Commandant + 3 Lieutenants) dont 1 traître. -> *(DEV B)* ✅
-- [x] Vérifier dans les logs que les 3 loyaux ont pris la même décision. -> *(DEV B)* ✅
-- [x] Créer un script Python (`scripts/visualiser_logs.py`) avec Graphviz pour dessiner les échanges à partir des logs (pour le rapport). -> *(DEV B)* ✅
+- `n` : nombre de généraux, commandant compris. Le commandant a l'ID `0` et les lieutenants les IDs `1` à `n-1`.
+- `m` : nombre de processus byzantins.
+- `liste_ids_traitres` : exactement `m` IDs distincts compris entre `0` et `n-1`. Il permet de choisir le commandant, un ou plusieurs lieutenants, ou les deux.
 
-### 7. Jour 18-19 : Test n=3, m=1 (La borne est violée)
-- [x] Utiliser le script shell (`scripts/run_test.sh 3 1`) qui lance 3 processus dont 1 traître. -> *(DEV B)* ✅
-- [x] Vérifier que les 2 loyaux ne sont **PAS** d'accord (ou sont bloqués). Prendre une capture d'écran des logs pour le rapport. -> *(DEV B)* ✅
+Si la liste est omise, les IDs `0` à `m-1` sont utilisés par défaut. Exemples :
 
----
+```sh
+./main 4 1 1       # un lieutenant traître, commandant loyal
+./main 4 1 0       # commandant traître
+./main 7 2 0,3      # commandant et lieutenant 3 traîtres
+./main 3 1 0       # scénario hors borne
+```
 
-## 🛠️ Résumé des Outils Installés
-- [x] **Ubuntu / Linux** (Machine virtuelle VirtualBox)
-- [x] **VS Code** (avec l'extension "C/C++")
-- [x] **GCC, Make, GDB**
-- [x] **Git & GitHub**
-- [x] **Python3 + Matplotlib / Graphviz** (pour les graphiques)
+Le programme accepte `3 <= n <= 32` et `0 <= m <= n-2`. Une limite de 50 000 chemins par processus prévient les configurations trop coûteuses en mémoire et en messages.
 
----
+## Algorithme et borne
 
-## 👥 Répartition du Travail
-- **DEV A** (Réseau et Logique) : Sockets, `fork()`, boucles de discussion (Tours 1 et 2) et Makefile.
-- **DEV B** (Système et Analyse) : Gestion des fichiers logs, scripts de test automatisés (shell), graphiques Python et rédaction du rapport.
+OM(m) nécessite `m+1` tours pour tolérer jusqu'à `m` fautes byzantines :
+
+1. Au premier tour, le commandant envoie une valeur à chaque lieutenant.
+2. Aux tours suivants, les lieutenants retransmettent récursivement les valeurs reçues, avec un chemin d'expéditeurs pour distinguer chaque branche de l'arbre OM.
+3. Chaque lieutenant calcule les majorités de l'arbre, puis sa décision finale. En cas d'égalité, la valeur par défaut est `Retraite`.
+
+Un processus déclaré traître simule un comportement byzantin déterministe : il peut envoyer des valeurs différentes selon le destinataire et le chemin. Ce modèle permet de répéter les scénarios, mais ne couvre pas toutes les stratégies byzantines possibles.
+
+La garantie théorique d'accord et de validité exige `n >= 3m + 1`. Une configuration hors borne reste autorisée afin d'observer les limites. Elle ne doit pas nécessairement produire des décisions différentes lors de chaque exécution : la borne indique l'absence de garantie, pas un désaccord obligatoire dans tout scénario.
+
+Scénarios demandés :
+
+```sh
+./scripts/run_test.sh 4 1 1
+./scripts/run_test.sh 7 2 0,3
+./scripts/run_test.sh 3 1 0
+```
+
+Le script vérifie l'accord des lieutenants loyaux et, si le commandant est loyal, la validité de sa valeur. Pour `n=3, m=1`, il signale le résultat observé sans exiger un désaccord, puisque le scénario est hors borne.
+
+Pour lancer les trois cas :
+
+```sh
+bash scripts/run_test_suite.sh
+```
+
+Chaque exécution conserve une copie du journal sous `logs/trace_n*_m*_traitres-*.log`. Le journal courant reste `logs/trace_globale.log`.
+
+## Complexité des messages
+
+Le nombre de messages de cette version d'OM(m) est :
+
+```text
+(n - 1) + (n - 1) * somme(P(n - 2, k), k = 1..m)
+```
+
+où `P(a,k) = a * (a-1) * ... * (a-k+1)`. Pour `m` fixé, cela donne `O(n^(m+1))`; quand `m` augmente, le nombre de messages croît de façon combinatoire. Ce n'est donc pas `O(nm)`. Cette croissance explique la limite de chemins imposée par le programme.
+
+## Journaux et visualisation
+
+Les processus écrivent dans `logs/trace_globale.log` au format :
+
+```text
+[AAAA-MM-JJ HH:MM:SS.mmm] [PID:ID] [ACTION] détails
+```
+
+Les journaux incluent les rôles, les messages OM (tour, chemin, valeur et destinataire), les réceptions, les votes et les décisions. L'accès concurrent au journal est verrouillé par `flock`.
+
+Pour dessiner le graphe du dernier scénario exécuté :
+
+```sh
+python3 scripts/visualiser_logs.py
+```
+
+Le graphe est enregistré dans `logs/graphe_reseau.png` et construit ses nœuds à partir du journal, y compris pour `n=7`.
+
+## Structure du dépôt
+
+```text
+src/
+  main.c          Simulation OM(m), processus, sockets et votes
+  log.c, log.h    Journalisation partagée
+  server.c        Serveur TCP de démonstration
+  test_client.c   Client TCP de démonstration
+scripts/
+  run_test.sh              Lance et vérifie une configuration
+  run_test_suite.sh        Lance les trois scénarios demandés
+  verifier_resultats.py    Vérifie accord et validité selon la borne
+  visualiser_logs.py       Génère le graphe des échanges
+logs/                      Journaux archivés et graphe généré
+```

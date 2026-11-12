@@ -1,58 +1,101 @@
-import re
 import os
+import re
+
 import graphviz
 
+
 LOG_FILE = "logs/trace_globale.log"
+ROLE_PATTERN = re.compile(
+    r"\[PID:(\d+)\] \[DEMARRAGE\] General \d+ "
+    r"role=(COMMANDANT|LIEUTENANT) status=(LOYAL|TRAITRE)"
+)
+OM_SEND_PATTERN = re.compile(
+    r"\[PID:(\d+)\] \[OM_ENVOI\] round=(\d+) path=([^ ]+) "
+    r"value=(Attaque|Retraite) dest=(\d+)"
+)
+LEGACY_TOUR1_PATTERN = re.compile(
+    r"\[PID:(\d+)\] \[RECEPTION_TOUR1\] J'ai recu du Commandant : (\w+)"
+)
+LEGACY_TOUR2_PATTERN = re.compile(
+    r"\[PID:(\d+)\] \[TOUR2_ENVOI\] (?:Envoye|Envoie) "
+    r"'(\d+):(\w+)' au lieutenant (\d+)"
+)
+
 
 def generer_graphviz():
     if not os.path.exists(LOG_FILE):
-        print(f"⚠️ Fichier {LOG_FILE} introuvable.")
+        print(f"Fichier {LOG_FILE} introuvable.")
         return
 
-    # Création du graphe orienté avec le moteur "circo" (disposition en cercle)
-    # On utilise xlabel pour contourner le bug des labels sur flèches courbées
-    dot = graphviz.Digraph(comment='Réseau Byzantin', format='png', engine='circo')
-    
-    dot.attr('node', shape='circle', style='filled', color='lightblue', fontname='Arial', fontsize='14', width='1.5')
-    dot.attr('edge', fontname='Arial', fontsize='12', penwidth='2')
-    
-    # Nœuds
-    dot.node('0', 'Commandant', fillcolor='lightcoral') 
-    dot.node('1', 'L1')
-    dot.node('2', 'L2')
-    dot.node('3', 'L3')
+    dot = graphviz.Digraph(comment="Reseau Byzantin", format="png", engine="circo")
+    dot.attr(
+        "node",
+        shape="circle",
+        style="filled",
+        color="lightblue",
+        fontname="Arial",
+        fontsize="12",
+        width="1.4",
+    )
+    dot.attr("edge", fontname="Arial", fontsize="9", penwidth="1.5")
 
-    # Patterns pour lire les logs
-    pattern_tour1 = re.compile(r"\[PID:(\d+)\] \[RECEPTION_TOUR1\] J'ai recu du Commandant : (\w+)")
-    pattern_tour2 = re.compile(r"\[PID:(\d+)\] \[TOUR2_ENVOI\] Envoye '(\d+):(\w+)' au lieutenant (\d+)")
-    
-    with open(LOG_FILE, "r") as f:
-        for ligne in f:
-            # --- TOUR 1 ---
-            match_t1 = pattern_tour1.search(ligne)
-            if match_t1:
-                dest = match_t1.group(1)
-                msg = match_t1.group(2)
-                couleur = 'green' if msg == 'Attaque' else 'red'
-                dot.edge('0', dest, xlabel=msg, color=couleur)
+    nodes = {}
+    sends = []
+    with open(LOG_FILE, encoding="utf-8") as log_file:
+        for line in log_file:
+            role_match = ROLE_PATTERN.search(line)
+            if role_match:
+                node_id, role, status = role_match.groups()
+                nodes[node_id] = (role, status)
+                continue
 
-            # --- TOUR 2 ---
-            match_t2 = pattern_tour2.search(ligne)
-            if match_t2:
-                exp = match_t2.group(1)
-                msg = match_t2.group(3)
-                dest = match_t2.group(4)
-                
-                # On force le dessin des deux flèches (A -> B et B -> A)
-                # L'utilisation de xlabel évite le crash de Graphviz
-                dot.edge(exp, dest, xlabel=msg, color='blue')
+            send_match = OM_SEND_PATTERN.search(line)
+            if send_match:
+                sender, round_number, path, value, destination = send_match.groups()
+                sends.append((sender, destination, round_number, path, value))
+                continue
 
-    # Sauvegarde
+            legacy_tour1 = LEGACY_TOUR1_PATTERN.search(line)
+            if legacy_tour1:
+                destination, value = legacy_tour1.groups()
+                sends.append(("0", destination, "1", "-", value))
+                continue
+
+            legacy_tour2 = LEGACY_TOUR2_PATTERN.search(line)
+            if legacy_tour2:
+                sender, _message_sender, value, destination = legacy_tour2.groups()
+                sends.append((sender, destination, "2", "-", value))
+
+    for sender, destination, *_ in sends:
+        nodes.setdefault(sender, ("LIEUTENANT", "LOYAL"))
+        nodes.setdefault(destination, ("LIEUTENANT", "LOYAL"))
+    nodes.setdefault("0", ("COMMANDANT", "LOYAL"))
+
+    for node_id in sorted(nodes, key=int):
+        role, status = nodes[node_id]
+        label = "Commandant" if role == "COMMANDANT" else f"L{node_id}"
+        if status == "TRAITRE":
+            label += "\nTRAITRE"
+        dot.node(
+            node_id,
+            label,
+            fillcolor="lightcoral" if status == "TRAITRE" else "lightblue",
+        )
+
+    for sender, destination, round_number, path, value in sends:
+        color = "green" if value == "Attaque" else "red"
+        dot.edge(
+            sender,
+            destination,
+            xlabel=f"r{round_number} {path}: {value}",
+            color=color,
+        )
+
     os.makedirs("logs", exist_ok=True)
-    chemin_sortie = "logs/graphe_reseau"
-    dot.render(chemin_sortie, cleanup=True)
-    print(f"✅ Graphique généré avec succès : {chemin_sortie}.png")
+    output_path = "logs/graphe_reseau"
+    dot.render(output_path, cleanup=True)
+    print(f"Graphe genere : {output_path}.png")
+
 
 if __name__ == "__main__":
-    print("📊 Génération du graphe avec Graphviz...")
     generer_graphviz()
